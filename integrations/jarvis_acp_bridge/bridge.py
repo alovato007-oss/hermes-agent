@@ -75,7 +75,7 @@ async def _run_fixed_pretest() -> dict[str, Any]:
     env["HERMES_ACP_SKIP_CONFIGURED_MCP"] = "1"
     proc = await asyncio.create_subprocess_exec(
         *command, cwd=cwd, env=env,
-        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
     )
     try:
         await _rpc(proc, 1, "initialize", {
@@ -119,7 +119,7 @@ async def _run_fixed_pretest() -> dict[str, Any]:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    configured = bool(os.getenv("JARVIS_DISPATCH_TOKEN") and os.getenv("JARVIS_PRETEST_MISSION_ID"))
+    configured = bool(os.getenv("JARVIS_PRETEST_ENABLED") == "true" and os.getenv("JARVIS_DISPATCH_TOKEN") and os.getenv("JARVIS_PRETEST_MISSION_ID"))
     return {"status": "ready" if configured else "unconfigured"}
 
 
@@ -127,8 +127,8 @@ async def health() -> dict[str, str]:
 async def pretest(body: DispatchRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
     token = os.getenv("JARVIS_DISPATCH_TOKEN", "")
     allowed_mission = os.getenv("JARVIS_PRETEST_MISSION_ID", "")
-    if not token or not allowed_mission:
-        raise HTTPException(status_code=503, detail="Pre-test bridge is not configured")
+    if os.getenv("JARVIS_PRETEST_ENABLED") != "true" or not token or not allowed_mission:
+        raise HTTPException(status_code=503, detail="Pre-test bridge is disabled or not configured")
     supplied = authorization.removeprefix("Bearer ") if authorization else ""
     if not hmac.compare_digest(supplied, token):
         raise HTTPException(status_code=401, detail="Unauthorized")
